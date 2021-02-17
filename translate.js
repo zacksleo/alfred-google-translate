@@ -2,6 +2,18 @@ var querystring = require('querystring');
 var got = require('got');
 var token = require('./token');
 var languages = require('./languages');
+var alfy = require('alfy')
+
+function cachableTranslate(text, opts) {
+    return new Promise((resolve, reject) => {
+        const cache = alfy.cache.get(text, {});
+        if (cache) {
+            resolve(cache);
+        } else {
+            return translate(text, opts);
+        }
+    });
+}
 
 function translate(text, opts) {
     opts = opts || {};
@@ -23,8 +35,9 @@ function translate(text, opts) {
             q: text
         };
         data[token.name] = token.value;
-        return url + '?' + querystring.stringify(data);
-    }).then(function (url) {
+        return { url: url + '?' + querystring.stringify(data), q: text };
+    }).then(function (config) {
+        const { url, q } = config;
         return got(url, {agent: opts.agent}).then(function (res) {
             var body = JSON.parse(res.body);
 
@@ -129,7 +142,7 @@ function translate(text, opts) {
                     });
                 });
             }
-
+            alfy.cache.set(q, result, { maxAge: 3600 * 1000 * 48 });
             return result;
         }).catch(function (err) {
             err.message += `\nUrl: ${url}`;
@@ -143,4 +156,4 @@ function translate(text, opts) {
     });
 }
 
-module.exports.translate = translate;
+module.exports.translate = cachableTranslate;
